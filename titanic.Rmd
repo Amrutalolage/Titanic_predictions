@@ -1,0 +1,80 @@
+---
+title: "Titanic_Servival_Pred"
+author: "Amruta Lolage"
+date: "11/4/2019"
+output: pdf_document
+---
+
+```{r packages}
+
+pacman::p_load(caret, data.table, gains, leaps, MASS, tidyverse,rcpp, caTools)
+theme_set(theme_classic())
+```
+
+
+
+```{r read data}
+train <- read.csv("train.csv", sep=',', header=TRUE)
+str(train)
+test <- read.csv("test.csv", sep=",", header= TRUE)
+test.label <- read.csv("gender_submission.csv", header=TRUE)
+test <- merge(test, test.label, by="PassengerId")
+str(test)
+```
+
+
+
+```{r }
+train <- train[,-c(9,11)]
+str(train)
+test <- test[,-c(8,10)]
+str(test)
+train$Pclass <- as.factor(train$Pclass)
+test$Pclass <- as.factor(test$Pclass)
+
+```
+```{r Missing values}
+age <- c(train$Age, test$Age)
+avg.age <- mean(age, na.rm=T)
+train$Age[is.na(train$Age)] <- round(avg.age,1)
+test$Age[is.na(test$Age)] <- round(avg.age,1)
+sapply(train, function(x) sum(is.na(x)))
+sapply(test, function(x) sum(is.na(x)))
+```
+```{r regression model}
+logitmodel <- glm(Survived ~Pclass + Sex + Age+SibSp+Parch+Fare, train, family='binomial')
+summary(logitmodel)
+```
+
+
+```{r Predictions}
+
+confint(logitmodel)
+predict1 <- predict(logitmodel, test, type="response")
+head(predict1)
+
+conf <- table(Actualvalue=test$Survived, PredictedValue= predict1 >0.5)
+conf
+AV <- conf[1,1]
+AVT <- conf[2,2]
+PV <- conf[1,2]
+PVF <- conf[2,1]
+acc = (AV+AVT)/(AV+AVT+PV+PVF)
+print(acc)
+
+install.packages(c("Amelia", "margins"))
+install.packages("stats")
+install.packages("Rtools")
+library("prediction")
+library("ROCR")
+
+ROCRPred <- prediction(predict1, test$Survived)
+ROCRPref <- performance(ROCRPred, "tpr", "fpr")
+plot(ROCRPref, colorize=TRUE, print.cutoffs.at=seq(0.1,by=0.1))
+
+auc <- performance(ROCRPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+
+```
